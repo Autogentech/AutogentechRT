@@ -13832,12 +13832,32 @@ function launchApp() {
   _updatePetaTabBlink();
   setTimeout(_updatePollTabBlink, 300);
 
-  setTimeout(() => {
-    const room = _DEV_MODE
-      ? 'DEV-puri-mandar-rt012-sandbox'
-      : (RUKUN_CONFIG.ROOM_ID);
+  // ── Load Supabase data dulu sebelum render, lalu init realtime ──
+  (async () => {
+    const room = _DEV_MODE ? 'DEV-puri-mandar-rt012-sandbox' : RUKUN_CONFIG.ROOM_ID;
+    try {
+      const _SB_URL  = 'https://yqiagjgokwdppvajzasg.supabase.co';
+      const _SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxaWFnamdva3dkcHB2YWp6YXNnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyNjIzNDcsImV4cCI6MjA5NTgzODM0N30.9zn0S_BSy30NK2d1vPHm3jG7FcEClbshSvb6-FZ_C04';
+      const resp = await fetch(_SB_URL + '/rest/v1/rukun_realtime?room=eq.' + encodeURIComponent(room) + '&select=collection,data', {
+        headers: { 'apikey': _SB_ANON, 'Authorization': 'Bearer ' + _SB_ANON, 'Accept': 'application/json' }
+      });
+      if(resp.ok) {
+        const rows = await resp.json();
+        if(Array.isArray(rows) && rows.length > 0) {
+          rows.forEach(row => {
+            if(!row.collection || !row.data) return;
+            const json = JSON.stringify(row.data);
+            try { localStorage.setItem('RA_' + row.collection, json); } catch(e){}
+            try { localStorage.setItem(row.collection, json); } catch(e){}
+          });
+          try { initWargaData(); } catch(e){}
+          try { if(APP.page) navigate(APP.page); } catch(e){}
+          console.log('[RukunApp] Pre-launch Supabase load OK, rows:', rows.length);
+        }
+      }
+    } catch(e) { console.warn('[RukunApp] Pre-launch fetch error:', e.message); }
     GUN_DB.init(null, room, true);
-  }, 600);
+  })();
 
   // ── Session Timeout 30 menit idle ──
   if(APP.role === 'warga') {
